@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      - POSTGRES_DB=event_scheduler_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5404:5432"
+
+volumes:
+  postgres_data:
