@@ -1,4 +1,3 @@
-
 from django.contrib.auth.models import User
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
@@ -6,7 +5,7 @@ from django.contrib.postgres.fields import ArrayField
 
 class RecurrenceRule(models.Model):
     """
-    Defines recurrence rules for events, including weekday selection.
+    Defines recurrence rules for events, including weekday selection and relative-date patterns.
     """
     FREQUENCY_CHOICES = (
         ('DAILY', 'Daily'),
@@ -22,6 +21,13 @@ class RecurrenceRule(models.Model):
         ('FRI', 'Friday'),
         ('SAT', 'Saturday'),
         ('SUN', 'Sunday'),
+    )
+    ORDINAL_CHOICES = (
+        (1, 'First'),
+        (2, 'Second'),
+        (3, 'Third'),
+        (4, 'Fourth'),
+        (5, 'Fifth'),
     )
     frequency = models.CharField(
         max_length=10,
@@ -43,10 +49,24 @@ class RecurrenceRule(models.Model):
         blank=True,
         help_text="Specific weekdays for WEEKLY recurrence (e.g., ['MON', 'WED'])."
     )
+    weekday = models.CharField(
+        max_length=3,
+        choices=WEEKDAY_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Weekday for MONTHLY relative-date recurrence (e.g., 'FRI' for second Friday)."
+    )
+    ordinal = models.PositiveSmallIntegerField(
+        choices=ORDINAL_CHOICES,
+        null=True,
+        blank=True,
+        help_text="Ordinal position for MONTHLY recurrence (e.g., 2 for second Friday)."
+    )
 
     def __str__(self):
         weekdays_str = f" on {', '.join(self.weekdays)}" if self.weekdays else ""
-        return f"{self.frequency} every {self.interval} period(s){weekdays_str}, ends {self.end_date or 'never'}"
+        relative_str = f" on the {self.get_ordinal_display()} {self.get_weekday_display()}" if self.weekday and self.ordinal else ""
+        return f"{self.frequency} every {self.interval} period(s){weekdays_str}{relative_str}, ends {self.end_date or 'never'}"
 
     class Meta:
         verbose_name = "recurrence rule"
