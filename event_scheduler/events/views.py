@@ -1,6 +1,6 @@
 # event_scheduler_project/events/views.py
 from rest_framework import generics
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
 from datetime import datetime, timedelta
@@ -10,6 +10,8 @@ from .models import Event, RecurrenceRule
 from .serializers import EventSerializer
 from rest_framework.response import Response
 from rest_framework import status
+from django.contrib.auth.models import User
+from .serializers import UserSerializer
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -213,4 +215,22 @@ class EventDeleteView(generics.DestroyAPIView):
         return Response(
             {'message': 'Event deleted successfully'},
             status=status.HTTP_200_OK
+        )
+
+
+
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {"message": "User created successfully"},
+            status=status.HTTP_201_CREATED,
+            headers=headers
         )

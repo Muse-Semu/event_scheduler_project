@@ -1,6 +1,6 @@
 // src/components/LoginForm.tsx
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 const LoginForm: React.FC = () => {
@@ -64,10 +64,19 @@ const LoginForm: React.FC = () => {
           Login
         </button>
       </form>
+      <div className="mt-4 text-center">
+        <p className="text-sm text-gray-600">
+          Don't have an account?{" "}
+          <Link
+            to="/register"
+            className="text-blue-500 hover:underline font-medium"
+          >
+            Register here
+          </Link>
+        </p>
+      </div>
     </div>
   );
 };
 
 export default LoginForm;
-
-
