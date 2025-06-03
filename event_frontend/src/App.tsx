@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm';
 import EventModal from './components/EventModal';
 import useAuthStore from './store/authStore';
 import { useModalStore } from './store/modalStore';
+import RegisterForm from "./components/RegisterForm";
 
 const App: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
@@ -39,6 +40,7 @@ const App: React.FC = () => {
             }
           />
           <Route path="/login" element={<LoginForm />} />
+          <Route path="/register" element={<RegisterForm />} />
         </Routes>
       </div>
       {isOpen && <EventModal />}
