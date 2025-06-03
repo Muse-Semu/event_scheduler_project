@@ -1,6 +1,7 @@
 import { useModalStore } from "../store/modalStore";
 import { format } from "date-fns";
 import useEvents from "../hooks/useEvents";
+import { useState } from "react";
 
 const EventList: React.FC = () => {
   const { openModal } = useModalStore();
@@ -13,13 +14,25 @@ const EventList: React.FC = () => {
     isFetchingNextPage,
   } = useEvents();
 
+  const [filter, setFilter] = useState("All");
+  const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(5); // Initial number of visible events
+  const loadIncrement = 5; // Number of events to load/unload
+
   if (isLoading) return <div className="text-center p-4">Loading...</div>;
   if (isError)
     return <div className="text-center p-4">Error loading events</div>;
 
   const allEvents = data?.pages.flatMap((page) => page.results) || [];
 
-  // Helper function to format recurrence rule
+  const isEventEnded = (event: any) => {
+    const now = new Date();
+    if (event.is_recurring && event.recurrence_rule?.end_date) {
+      return new Date(event.recurrence_rule.end_date) < now;
+    }
+    return new Date(event.end_time) < now;
+  };
+
   const formatRecurrence = (rule: any) => {
     if (!rule) return "";
     if (rule.frequency === "WEEKLY") {
@@ -45,20 +58,54 @@ const EventList: React.FC = () => {
     }`;
   };
 
-  // Helper function to check if event has ended
-  const isEventEnded = (endDate: string | null) => {
-    if (!endDate) return false;
-    return new Date(endDate) < new Date();
-  };
+  const sortedEvents = [...allEvents].sort((a, b) => {
+    const aTime = new Date(a.start_time).getTime();
+    const bTime = new Date(b.start_time).getTime();
+    if (isEventEnded(a) && !isEventEnded(b)) return 1;
+    if (!isEventEnded(a) && isEventEnded(b)) return -1;
+    return bTime - aTime;
+  });
+
+  const filteredEvents = sortedEvents.filter((event) => {
+    const matchesFilter =
+      filter === "All" ||
+      (filter === "Active" && !isEventEnded(event)) ||
+      (filter === "Closed" && isEventEnded(event));
+    const matchesSearch =
+      search === "" ||
+      event.title.toLowerCase().includes(search.toLowerCase()) ||
+      event.description.toLowerCase().includes(search.toLowerCase());
+    return matchesFilter && matchesSearch;
+  });
+
+  const visibleEvents = filteredEvents.slice(0, visibleCount);
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h2 className="text-2xl font-bold mb-4">Upcoming Events</h2>
-      {allEvents.length ? (
+      <div className="mb-4 flex space-x-4">
+        <select
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="border p-2 rounded"
+        >
+          <option value="All">All</option>
+          <option value="Active">Active</option>
+          <option value="Closed">Closed</option>
+        </select>
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by title or description..."
+          className="border p-2 rounded w-full sm:w-1/2"
+        />
+      </div>
+      {visibleEvents.length ? (
         <div className="space-y-4">
           <ul className="space-y-4">
-            {allEvents.map((event) => {
-              const hasEnded = isEventEnded(event.recurrence_rule?.end_date);
+            {visibleEvents.map((event) => {
+              const hasEnded = isEventEnded(event);
               return (
                 <li
                   key={event.id}
@@ -85,22 +132,40 @@ const EventList: React.FC = () => {
                   )}
                   {hasEnded && (
                     <p className="text-red-500 font-medium mt-2">
-                      This event series has ended.
+                      This event {event.is_recurring ? "series " : ""}has ended.
                     </p>
                   )}
                 </li>
               );
             })}
           </ul>
-          {hasNextPage && (
-            <button
-              onClick={() => fetchNextPage()}
-              disabled={isFetchingNextPage}
-              className="w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
-            >
-              {isFetchingNextPage ? "Loading more..." : "Load More"}
-            </button>
-          )}
+          <div className="flex space-x-4 mt-4">
+            {visibleCount < filteredEvents.length && (
+              <button
+                onClick={() => setVisibleCount(visibleCount + loadIncrement)}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+              >
+                Load More
+              </button>
+            )}
+            {visibleCount > loadIncrement && (
+              <button
+                onClick={() => setVisibleCount(visibleCount - loadIncrement)}
+                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded"
+              >
+                Load Less
+              </button>
+            )}
+            {hasNextPage && (
+              <button
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                className="w-full sm:w-auto bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+              >
+                {isFetchingNextPage ? "Loading more..." : "Load More"}
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <p>No upcoming events.</p>
