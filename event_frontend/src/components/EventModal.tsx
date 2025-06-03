@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useModalStore } from "../store/modalStore";
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const WEEKDAY_OPTIONS = [
   { value: "MON", label: "Monday" },
@@ -51,8 +53,8 @@ const EventModal: React.FC = () => {
   const mutation = useMutation({
     mutationFn: (data: any) => {
       const url = selectedEvent
-        ? `http://localhost:8000/api/events/${selectedEvent.id}/`
-        : "http://localhost:8000/api/events/";
+        ? `${apiClient}/events/${selectedEvent.id}/`
+        : `${apiClient}/events/`;
       const method = selectedEvent ? "put" : "post";
       return axios({
         method,
@@ -66,6 +68,21 @@ const EventModal: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["events"] });
       closeModal();
+      toast.success(
+        selectedEvent
+          ? "Event updated successfully! 🎉"
+          : "Event created successfully! 🎉",
+        {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+        }
+      );
     },
     onError: (err: any) => {
       setError(
@@ -73,6 +90,16 @@ const EventModal: React.FC = () => {
           JSON.stringify(err.response?.data) ||
           "An error occurred."
       );
+      toast.error("Failed to save event. Please try again.", {
+        position: "top-right",
+        autoClose: 3000,
+        hideProgressBar: false,
+        closeOnClick: true,
+        pauseOnHover: true,
+        draggable: true,
+        progress: undefined,
+        theme: "light",
+      });
     },
   });
 
@@ -147,6 +174,8 @@ const EventModal: React.FC = () => {
   if (!isOpen) return null;
 
   return (
+    <>
+      <ToastContainer />
     <div className="fixed inset-0 bg-black/50 bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-[800px] overflow-auto max-h-[90vh] animate-fade-in">
         <h2 className="text-2xl font-bold mb-4">
@@ -342,6 +371,7 @@ const EventModal: React.FC = () => {
         </form>
       </div>
     </div>
+    </>
   );
 };
 
