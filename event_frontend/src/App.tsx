@@ -14,6 +14,7 @@ import { useModalStore } from "./store/modalStore";
 import RegisterForm from "./components/RegisterForm";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import Dashboard from "./components/Dashboard";
 const App: React.FC = () => {
   const { isAuthenticated } = useAuthStore();
   const { isOpen } = useModalStore();
@@ -38,12 +39,16 @@ const App: React.FC = () => {
           <Route
             path="/"
             element={
-              isAuthenticated ? <CalendarView /> : <Navigate to="/login" />
+              isAuthenticated ? <Dashboard /> : <Navigate to="/login" />
             }
           />
           <Route
             path="/events"
             element={isAuthenticated ? <EventList /> : <Navigate to="/login" />}
+          />
+          <Route
+            path="/calendar"
+            element={isAuthenticated ? <CalendarView /> : <Navigate to="/login" />}
           />
           <Route path="/login" element={<LoginForm />} />
           <Route path="/register" element={<RegisterForm />} />
