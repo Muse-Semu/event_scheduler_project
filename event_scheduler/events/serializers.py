@@ -1,3 +1,4 @@
+
 from rest_framework import serializers
 from django.utils import timezone
 from datetime import timedelta
@@ -9,11 +10,11 @@ class RecurrenceRuleSerializer(serializers.ModelSerializer):
     """
     Serializes recurrence rules for events.
 
-    Validates frequency, interval, and end_date for standard and interval-based recurrence.
+    Validates frequency, interval, end_date, and weekdays for recurrence patterns.
     """
     class Meta:
         model = RecurrenceRule
-        fields = ['frequency', 'interval', 'end_date']
+        fields = ['frequency', 'interval', 'end_date', 'weekdays']
 
     def validate_frequency(self, value):
         """
@@ -69,12 +70,55 @@ class RecurrenceRuleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("End date cannot be in the past.")
         return value
 
+    def validate_weekdays(self, value):
+        """
+        Ensure weekdays are valid and unique.
+
+        Args:
+            value: List of weekday abbreviations.
+
+        Raises:
+            ValidationError: If invalid or duplicate weekdays.
+
+        Returns:
+            Validated weekdays.
+        """
+        if value:
+            valid_days = [choice[0] for choice in RecurrenceRule.WEEKDAY_CHOICES]
+            invalid_days = [d for d in value if d not in valid_days]
+            if invalid_days:
+                raise serializers.ValidationError(f"Invalid weekdays: {invalid_days}. Must be one of {valid_days}.")
+            if len(set(value)) != len(value):
+                raise serializers.ValidationError("Duplicate weekdays are not allowed.")
+        return value
+
+    def validate(self, data):
+        """
+        Ensure weekdays are only used with WEEKLY frequency.
+
+        Args:
+            data: Recurrence rule data.
+
+        Raises:
+            ValidationError: If weekdays used with non-WEEKLY frequency.
+
+        Returns:
+            Validated data.
+        """
+        frequency = data.get('frequency')
+        weekdays = data.get('weekdays')
+        if weekdays and frequency != 'WEEKLY':
+            raise serializers.ValidationError({
+                "weekdays": "Weekdays can only be specified for WEEKLY frequency."
+            })
+        return data
+
 
 class EventSerializer(serializers.ModelSerializer):
     """
     Serializes events, including location and recurrence.
 
-    Validates time, location, and interval-based recurrence constraints.
+    Validates time, location, and recurrence constraints.
     """
     recurrence_rule = RecurrenceRuleSerializer(required=False, allow_null=True)
 
@@ -85,14 +129,13 @@ class EventSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         """
-        Validate event data, including interval-based recurrence rules.
+        Validate event data, including weekday-based recurrence rules.
 
         Args:
             data: Input data.
 
         Raises:
-            ValidationError: If start_time is past, end_time ≤ start_time, recurrence_rule is invalid,
-                             or duration is insufficient for interval pattern.
+            ValidationError: If validations fail.
 
         Returns:
             Validated data.
@@ -117,6 +160,7 @@ class EventSerializer(serializers.ModelSerializer):
             start_date = data['start_time'].date()
             frequency = recurrence_rule.get('frequency')
             interval = recurrence_rule.get('interval', 1)
+            weekdays = recurrence_rule.get('weekdays')
 
             # Ensure end_date is after or equal to start_time.date()
             if end_date and end_date < start_date:
@@ -132,11 +176,19 @@ class EventSerializer(serializers.ModelSerializer):
                     min_duration = start_date + timedelta(days=interval)
                 elif frequency == 'WEEKLY':
                     min_duration = start_date + timedelta(days=interval * 7)
+                    if weekdays:
+                        # Require at least one week for weekday-specific events
+                        if end_date < start_date + timedelta(days=7):
+                            raise serializers.ValidationError({
+                                "recurrence_rule": {
+                                    "end_date": f"{error_msg} Minimum date: {start_date + timedelta(days=7)}."
+                                }
+                            })
                 elif frequency == 'MONTHLY':
                     min_duration = start_date + relativedelta(months=interval)
                 elif frequency == 'YEARLY':
                     min_duration = start_date + relativedelta(years=interval)
-                
+
                 if min_duration and end_date < min_duration:
                     raise serializers.ValidationError({
                         "recurrence_rule": {"end_date": f"{error_msg} Minimum date: {min_duration}."}
