@@ -16,7 +16,7 @@ A web application for managing calendar events with complex recurrence patterns.
 - [Changelog](#changelog)
 
 ## Overview
-The Event Scheduler is a full-stack application designed to manage calendar events with sophisticated recurrence patterns (e.g., every 3rd day, weekly on Mondays/Wednesdays, or "second Friday of each month"). The backend uses Django 5 and DRF for a robust API, PostgreSQL 17 for data storage, and JWT (via `djangorestframework-simplejwt`) for secure authentication. The project supports pagination (10 events per page) and is extensible for a React + TypeScript frontend.
+The Event Scheduler is a full-stack application designed to manage calendar events with sophisticated recurrence patterns (e.g., every 3rd day, weekly on Mondays/Wednesdays, or second Friday of each month). The backend uses Django 5 and DRF for a robust API, PostgreSQL 17 for data storage, and JWT (via `djangorestframework-simplejwt`) for secure authentication. The project supports pagination (10 events per page) and is extensible for a React + TypeScript frontend.
 
 ## Features
 The application implements the following user stories from the 360Ground Coding Challenge:
@@ -26,12 +26,12 @@ The application implements the following user stories from the 360Ground Coding 
 - **US-02**: Create recurring events (daily, weekly, monthly, yearly) with customizable intervals (completed).
 - **US-03**: Support interval-based recurrence (e.g., every 3rd day) (completed).
 - **US-04**: Schedule events on specific weekdays (e.g., every Monday and Wednesday) (completed).
-- **US-05**: Support relative-date patterns (e.g., second Friday of each month) (planned).
+- **US-05**: Support relative-date patterns (e.g., second Friday of each month) (completed).
 - **US-06**: View events in a calendar interface (planned).
 - **US-07**: List upcoming events in a text-based view (planned).
 - **US-08**: Edit existing events, including recurrence patterns (planned).
 - **US-09**: Delete entire events or specific recurring instances (planned).
-- **US-10**: Provide clear form validation error messages (partially completed for US-01 to US-04).
+- **US-10**: Provide clear form validation error messages (partially completed for US-01 to US-05).
 - **US-11**: User registration with username and password (in progress).
 - **US-12**: Secure login to access personal events (partially completed via JWT).
 - **US-13**: Logout to protect user sessions (planned).
@@ -57,36 +57,39 @@ The application implements the following user stories from the 360Ground Coding 
   - `updated_at`: DateTimeField (auto-updated timestamp).
 - **Purpose**: Stores event details for both single and recurring events.
 
-### RecurrenceRule (US-02, US-03, US-04)
+### RecurrenceRule (US-02, US-03, US-04, US-05)
 - **Fields**:
   - `frequency`: CharField (choices: `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`).
   - `interval`: PositiveIntegerField (default=1, e.g., 3 for every 3rd day).
   - `end_date`: DateField (optional, when recurrence stops).
   - `weekdays`: ArrayField of CharField (optional, e.g., `["MON", "WED"]` for weekly events).
-- **Purpose**: Defines recurrence patterns, including interval-based and weekday-specific schedules.
+  - `weekday`: CharField (optional, e.g., `FRI` for second Friday of the month).
+  - `ordinal`: PositiveSmallIntegerField (optional, 1–5 for first to fifth).
+- **Purpose**: Defines recurrence patterns, including interval-based, weekday-specific, and relative-date schedules.
 
 ## Recurrence Rules
-The recurrence rule feature (US-02, US-03, US-04) enables users to create events that repeat daily, weekly, monthly, or yearly, with customizable intervals (e.g., every 3rd day) and specific weekdays (e.g., every Monday and Wednesday), via the `/api/events/` endpoint. Recurrence details are stored in the `RecurrenceRule` model, linked to an `Event`.
+The recurrence rule feature (US-02, US-03, US-04, US-05) enables users to create events that repeat daily, weekly, monthly, or yearly, with customizable intervals (e.g., every 3rd day), specific weekdays (e.g., every Monday and Wednesday), or relative-date patterns (e.g., second Friday of each month), via the `/api/events/` endpoint. Recurrence details are stored in the `RecurrenceRule` model, linked to an `Event`.
 
 ### API Usage
 - **Endpoint**: `POST /api/events/` (create single or recurring events, requires `Authorization: Bearer <access_token>`).
-- **Example 1** (every Monday and Wednesday):
+- **Example 1** (second Friday of each month):
   ```bash
   curl -X POST http://localhost:8000/api/events/ \
        -H "Authorization: Bearer <access_token>" \
        -H "Content-Type: application/json" \
        -d '{
-         "title": "Yoga Class",
-         "description": "Weekly yoga",
-         "location": "Studio",
-         "start_time": "2025-07-07T18:00:00Z",
-         "end_time": "2025-07-07T19:00:00Z",
+         "title": "Book Club",
+         "description": "Monthly reading discussion",
+         "location": "Library",
+         "start_time": "2025-07-11T19:00:00Z",
+         "end_time": "2025-07-11T20:30:00Z",
          "is_recurring": true,
          "recurrence_rule": {
-           "frequency": "WEEKLY",
+           "frequency": "MONTHLY",
            "interval": 1,
            "end_date": "2025-12-31",
-           "weekdays": ["MON", "WED"]
+           "weekday": "FRI",
+           "ordinal": 2
          }
        }'
   ```
@@ -94,37 +97,39 @@ The recurrence rule feature (US-02, US-03, US-04) enables users to create events
   ```json
   {
     "id": 1,
-    "title": "Yoga Class",
-    "description": "Weekly yoga",
-    "location": "Studio",
-    "start_time": "2025-07-07T18:00:00Z",
-    "end_time": "2025-07-07T19:00:00Z",
+    "title": "Book Club",
+    "description": "Monthly reading discussion",
+    "location": "Library",
+    "start_time": "2025-07-11T19:00:00Z",
+    "end_time": "2025-07-11T20:30:00Z",
     "is_recurring": true,
     "recurrence_rule": {
-      "frequency": "WEEKLY",
+      "frequency": "MONTHLY",
       "interval": 1,
       "end_date": "2025-12-31",
-      "weekdays": ["MON", "WED"]
+      "weekday": "FRI",
+      "ordinal": 2
     }
   }
   ```
-- **Example 2** (every 2nd week on Friday):
+- **Example 2** (first Monday every 2nd month):
   ```bash
   curl -X POST http://localhost:8000/api/events/ \
        -H "Authorization: Bearer <access_token>" \
        -H "Content-Type: application/json" \
        -d '{
-         "title": "Team Sync",
-         "description": "Bi-weekly meeting",
+         "title": "Team Planning",
+         "description": "Bi-monthly strategy",
          "location": "Office",
-         "start_time": "2025-07-04T09:00:00Z",
-         "end_time": "2025-07-04T10:00:00Z",
+         "start_time": "2025-07-07T09:00:00Z",
+         "end_time": "2025-07-07T10:00:00Z",
          "is_recurring": true,
          "recurrence_rule": {
-           "frequency": "WEEKLY",
+           "frequency": "MONTHLY",
            "interval": 2,
            "end_date": "2025-12-31",
-           "weekdays": ["FRI"]
+           "weekday": "MON",
+           "ordinal": 1
          }
        }'
   ```
@@ -135,30 +140,42 @@ The recurrence rule feature (US-02, US-03, US-04) enables users to create events
   - `DAILY`, `interval=3`: Every 3rd day (e.g., July 3, July 6, July 9).
   - `WEEKLY`, `interval=1`, `weekdays=["MON", "WED"]`: Every Monday and Wednesday.
   - `WEEKLY`, `interval=2`, `weekdays=["FRI"]`: Every 2nd Friday (e.g., July 4, July 18).
-  - `MONTHLY`, `interval=1`: Every month (e.g., 3rd of each month).
+  - `MONTHLY`, `interval=1`: Every month on the same date (e.g., 3rd of each month).
   - `MONTHLY`, `interval=2`: Every 2nd month (e.g., July 3, September 3).
+  - `MONTHLY`, `interval=1`, `weekday="FRI"`, `ordinal=2`: Second Friday of each month.
+  - `MONTHLY`, `interval=2`, `weekday="MON"`, `ordinal=1`: First Monday every 2nd month.
   - `YEARLY`, `interval=1`: Every year (e.g., July 3, 2025, July 3, 2026).
 - **end_date**: Stops recurrence if set (e.g., no events after December 31, 2025).
-- **start_time` and `end_time`**: Define each occurrence’s time and duration (e.g., 6 PM–7 PM).
+- **start_time` and `end_time`**: Define each occurrence’s time and duration (e.g., 7 PM–8:30 PM).
 - **weekdays**: For `WEEKLY` events, specifies days (e.g., `["MON", "WED"]`).
+- **weekday/ordinal**: For `MONTHLY` events, specifies relative-date patterns (e.g., `weekday="FRI"`, `ordinal=2`).
 
 ### Validation
 - **Event**:
-  - `start_time`: Future (after current time, e.g., June 3, 2025, 11:55 AM EAT).
+  - `start_time`: Future (after current time, e.g., June 3, 2025, 12:26 PM EAT).
   - `end_time`: After `start_time`.
   - `is_recurring=true`: Requires `recurrence_rule`.
   - `is_recurring=false`: Forbids `recurrence_rule`.
 - **RecurrenceRule**:
   - `frequency`: Must be `DAILY`, `WEEKLY`, `MONTHLY`, or `YEARLY`.
-  - `interval`: Positive integer ≤ 100 (e.g., 2 for every 2nd week).
+  - `interval`: Positive integer ≤ 100 (e.g., 2 for every 2nd month).
   - `end_date`: If provided:
     - On or after current date.
     - On or after `start_time.date()`.
-    - Sufficient for at least one recurrence (e.g., ≥ 7 days for `WEEKLY` with `weekdays`).
+    - Sufficient for at least one recurrence (e.g., ≥ 1 month for `MONTHLY` with `weekday`/`ordinal`).
   - `weekdays`:
     - Optional, only for `WEEKLY` frequency.
     - Valid values: `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN`.
     - No duplicates allowed.
+  - `weekday`:
+    - Optional, only for `MONTHLY` frequency.
+    - Valid values: `MON`, `TUE`, `WED`, `THU`, `FRI`, `SAT`, `SUN`.
+  - `ordinal`:
+    - Optional, only for `MONTHLY` frequency.
+    - Valid values: 1, 2, 3, 4, 5 (first to fifth).
+  - `weekday` and `ordinal`:
+    - Must be provided together for `MONTHLY` relative-date patterns.
+    - Cannot be used with `weekdays`.
 
 ## Setup
 ### Prerequisites
@@ -271,12 +288,12 @@ The recurrence rule feature (US-02, US-03, US-04) enables users to create events
      ```bash
      curl -X POST http://localhost:8000/api/token/ -d "username=<username>&password=<password>"
      ```
-   - Create event (every Monday/Wednesday):
+   - Create event (second Friday of each month):
      ```bash
      curl -X POST http://localhost:8000/api/events/ \
           -H "Authorization: Bearer <access_token>" \
           -H "Content-Type: application/json" \
-          -d '{"title":"Yoga Class","description":"Weekly yoga","location":"Studio","start_time":"2025-07-07T18:00:00Z","end_time":"2025-07-07T19:00:00Z","is_recurring":true,"recurrence_rule":{"frequency":"WEEKLY","interval":1,"end_date":"2025-12-31","weekdays":["MON","WED"]}}'
+          -d '{"title":"Book Club","description":"Monthly reading discussion","location":"Library","start_time":"2025-07-11T19:00:00Z","end_time":"2025-07-11T20:30:00Z","is_recurring":true,"recurrence_rule":{"frequency":"MONTHLY","interval":1,"end_date":"2025-12-31","weekday":"FRI","ordinal":2}}'
      ```
 
 3. **Admin interface**:
@@ -292,7 +309,7 @@ The recurrence rule feature (US-02, US-03, US-04) enables users to create events
 - **Authentication**: JWT via `djangorestframework-simplejwt` for secure, stateless access.
 - **Models**:
   - `Event`: User-specific events with `location` and recurrence support.
-  - `RecurrenceRule`: Flexible recurrence patterns (US-02 to US-04).
+  - `RecurrenceRule`: Flexible recurrence patterns (US-02 to US-05).
 - **Deployment**: PostgreSQL in Docker (port `5404`); Django on host, with planned `Dockerfile`.
 - **Folder Structure**:
   - `events/`: Models, serializers, views, URLs.
@@ -304,13 +321,14 @@ The recurrence rule feature (US-02, US-03, US-04) enables users to create events
   - **US-02**: Recurring events (daily, weekly, monthly, yearly) with `frequency`, `interval`, and `end_date`.
   - **US-03**: Interval-based recurrence (e.g., every 3rd day, 2nd month).
   - **US-04**: Weekday-specific recurrence (e.g., every Monday and Wednesday).
+  - **US-05**: Relative-date patterns (e.g., second Friday of each month).
   - **US-10**: Validation for time, recurrence, and duration (partial).
   - **US-12**: JWT authentication for secure API access (partial).
   - Django project setup with PostgreSQL 17 and `events` app.
 - **In Progress**:
   - **US-11**: User registration.
 - **Planned**:
-  - **US-05 to US-09, US-13**: Relative-date patterns, views, editing, deletion, logout.
+  - **US-06 to US-09, US-13**: Views, editing, deletion, logout.
   - React + TypeScript frontend (US-06, US-07).
   - Automated tests (SS-03).
   - Stretch goals (SS-01 to SS-04).
