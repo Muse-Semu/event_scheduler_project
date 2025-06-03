@@ -2,9 +2,16 @@ import { useModalStore } from "../store/modalStore";
 import { format } from "date-fns";
 import useEvents from "../hooks/useEvents";
 import { useState } from "react";
+import { FiTrash2 } from "react-icons/fi";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import apiClient from "../api/client";
 
 const EventList: React.FC = () => {
   const { openModal } = useModalStore();
+  const queryClient = useQueryClient();
   const {
     data,
     isLoading,
@@ -16,8 +23,43 @@ const EventList: React.FC = () => {
 
   const [filter, setFilter] = useState("All");
   const [search, setSearch] = useState("");
-  const [visibleCount, setVisibleCount] = useState(5); // Initial number of visible events
-  const loadIncrement = 5; // Number of events to load/unload
+  const [visibleCount, setVisibleCount] = useState(5);
+  const loadIncrement = 5;
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  const deleteMutation = useMutation({
+    mutationFn: (eventId: number) => {
+      setDeletingId(eventId);
+      return apiClient.delete(`/events/delete/${eventId}/`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Event deleted successfully");
+      queryClient.invalidateQueries(["events"]);
+      setDeletingId(null);
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.error || "Failed to delete event");
+      setDeletingId(null);
+    },
+  });
+
+  const handleDelete = (
+    eventId: number,
+    eventTitle: string,
+    isRecurring: boolean
+  ) => {
+    const confirmMessage = isRecurring
+      ? `Delete ALL instances of "${eventTitle}"? This cannot be undone.`
+      : `Delete "${eventTitle}"? This cannot be undone.`;
+
+    if (window.confirm(confirmMessage)) {
+      deleteMutation.mutate(eventId);
+    }
+  };
 
   if (isLoading) return <div className="text-center p-4">Loading...</div>;
   if (isError)
@@ -109,32 +151,56 @@ const EventList: React.FC = () => {
               return (
                 <li
                   key={event.id}
-                  className={`p-4 rounded cursor-pointer ${
+                  className={`p-4 rounded ${
                     hasEnded
                       ? "bg-red-50 hover:bg-red-100"
                       : "bg-gray-50 hover:bg-gray-100"
                   }`}
-                  onClick={() => openModal(event)}
                 >
-                  <h3 className="text-lg font-semibold">{event.title}</h3>
-                  <p className="text-gray-600">{event.description}</p>
-                  <p className="text-gray-500">
-                    {format(new Date(event.start_time), "PPP p")} -{" "}
-                    {format(new Date(event.end_time), "p")}
-                  </p>
-                  {event.location && (
-                    <p className="text-gray-500">Location: {event.location}</p>
-                  )}
-                  {event.is_recurring && event.recurrence_rule && (
-                    <p className="text-gray-500">
-                      {formatRecurrence(event.recurrence_rule)}
-                    </p>
-                  )}
-                  {hasEnded && (
-                    <p className="text-red-500 font-medium mt-2">
-                      This event {event.is_recurring ? "series " : ""}has ended.
-                    </p>
-                  )}
+                  <div className="flex justify-between items-start">
+                    <div
+                      className="flex-1 cursor-pointer"
+                      onClick={() => openModal(event)}
+                    >
+                      <h3 className="text-lg font-semibold">{event.title}</h3>
+                      <p className="text-gray-600">{event.description}</p>
+                      <p className="text-gray-500">
+                        {format(new Date(event.start_time), "PPP p")} -{" "}
+                        {format(new Date(event.end_time), "p")}
+                      </p>
+                      {event.location && (
+                        <p className="text-gray-500">
+                          Location: {event.location}
+                        </p>
+                      )}
+                      {event.is_recurring && event.recurrence_rule && (
+                        <p className="text-gray-500">
+                          {formatRecurrence(event.recurrence_rule)}
+                        </p>
+                      )}
+                      {hasEnded && (
+                        <p className="text-red-500 font-medium mt-2">
+                          This event {event.is_recurring ? "series " : ""}has
+                          ended.
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(event.id, event.title, event.is_recurring);
+                      }}
+                      disabled={deletingId === event.id}
+                      className="text-red-500 hover:text-red-700 p-1 ml-2"
+                      aria-label="Delete event"
+                    >
+                      {deletingId === event.id ? (
+                        <span className="text-sm">Deleting...</span>
+                      ) : (
+                        <FiTrash2 size={18} />
+                      )}
+                    </button>
+                  </div>
                 </li>
               );
             })}
