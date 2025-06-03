@@ -1,6 +1,8 @@
 
 from rest_framework import serializers
 from django.utils import timezone
+from datetime import timedelta
+from dateutil.relativedelta import relativedelta
 from .models import Event, RecurrenceRule
 
 
@@ -15,35 +17,11 @@ class RecurrenceRuleSerializer(serializers.ModelSerializer):
         fields = ['frequency', 'interval', 'end_date']
 
     def validate_end_date(self, value):
-        """
-        Ensure end_date is in the future if provided.
-
-        Args:
-            value: The end_date value.
-
-        Raises:
-            serializers.ValidationError: If end_date is before today.
-
-        Returns:
-            The validated end_date.
-        """
         if value and value < timezone.now().date():
             raise serializers.ValidationError("End date cannot be in the past.")
         return value
 
     def validate_interval(self, value):
-        """
-        Ensure interval is positive.
-
-        Args:
-            value: The interval value.
-
-        Raises:
-            serializers.ValidationError: If interval is not positive.
-
-        Returns:
-            The validated interval.
-        """
         if value <= 0:
             raise serializers.ValidationError("Interval must be positive.")
         return value
@@ -71,7 +49,8 @@ class EventSerializer(serializers.ModelSerializer):
 
         Raises:
             serializers.ValidationError: If start_time is past, end_time <= start_time,
-                                        recurrence_rule is inconsistent, or end_date < start_time.date().
+                                        recurrence_rule is inconsistent, end_date < start_time.date(),
+                                        or duration is too short for frequency and interval.
 
         Returns:
             dict: Validated data.
@@ -91,14 +70,36 @@ class EventSerializer(serializers.ModelSerializer):
         if not is_recurring and recurrence_rule:
             raise serializers.ValidationError({"recurrence_rule": "Not allowed for non-recurring events."})
 
-        # Ensure end_date is after or equal to start_time.date() for recurring events
-        if is_recurring and recurrence_rule and recurrence_rule.get('end_date'):
-            end_date = recurrence_rule['end_date']
+        if is_recurring and recurrence_rule:
+            end_date = recurrence_rule.get('end_date')
             start_date = data['start_time'].date()
-            if end_date < start_date:
+            frequency = recurrence_rule.get('frequency')
+            interval = recurrence_rule.get('interval', 1)
+
+            # Ensure end_date is after or equal to start_time.date()
+            if end_date and end_date < start_date:
                 raise serializers.ValidationError({
                     "recurrence_rule": {"end_date": "End date cannot be before the event's start date."}
                 })
+
+            # Ensure duration supports at least one recurrence
+            if end_date:
+                min_duration = None
+                if frequency == 'DAILY':
+                    min_duration = start_date + timedelta(days=interval)
+                elif frequency == 'WEEKLY':
+                    min_duration = start_date + timedelta(days=interval * 7)
+                elif frequency == 'MONTHLY':
+                    min_duration = start_date + relativedelta(months=interval)
+                elif frequency == 'YEARLY':
+                    min_duration = start_date + relativedelta(years=interval)
+                
+                if min_duration and end_date < min_duration:
+                    raise serializers.ValidationError({
+                        "recurrence_rule": {
+                            "end_date": f"End date must allow at least one recurrence (minimum {min_duration})."
+                        }
+                    })
 
         return data
 
