@@ -4,6 +4,7 @@ import axios from "axios";
 import { useModalStore } from "../store/modalStore";
 import { ToastContainer, toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import apiClient from "../api/client";
 
 const WEEKDAY_OPTIONS = [
   { value: "MON", label: "Monday" },
@@ -51,19 +52,24 @@ const EventModal: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
 
   const mutation = useMutation({
-    mutationFn: (data: any) => {
-      const url = selectedEvent
-        ? `${apiClient}/events/${selectedEvent.id}/`
-        : `${apiClient}/events/`;
-      const method = selectedEvent ? "put" : "post";
-      return axios({
-        method,
-        url,
-        data,
+    mutationFn: async (data: any) => {
+      const token = localStorage.getItem("access_token");
+      if (!token) {
+        throw new Error("No access token found");
+      }
+
+      const config = {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem("access_token")}`,
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-      });
+      };
+
+      const url = selectedEvent ? `/events/${selectedEvent.id}/` : `/events/`;
+
+      return selectedEvent
+        ? await apiClient.put(url, data, config)
+        : await apiClient.post(url, data, config);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["events"] });
@@ -71,17 +77,7 @@ const EventModal: React.FC = () => {
       toast.success(
         selectedEvent
           ? "Event updated successfully! 🎉"
-          : "Event created successfully! 🎉",
-        {
-          position: "top-right",
-          autoClose: 3000,
-          hideProgressBar: false,
-          closeOnClick: true,
-          pauseOnHover: true,
-          draggable: true,
-          progress: undefined,
-          theme: "light",
-        }
+          : "Event created successfully! 🎉"
       );
     },
     onError: (err: any) => {
@@ -90,16 +86,7 @@ const EventModal: React.FC = () => {
           JSON.stringify(err.response?.data) ||
           "An error occurred."
       );
-      toast.error("Failed to save event. Please try again.", {
-        position: "top-right",
-        autoClose: 3000,
-        hideProgressBar: false,
-        closeOnClick: true,
-        pauseOnHover: true,
-        draggable: true,
-        progress: undefined,
-        theme: "light",
-      });
+      toast.error("Failed to save event. Please try again.");
     },
   });
 
