@@ -1,5 +1,4 @@
-// src/hooks/useEvents.ts
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import apiClient from "../api/client";
 import { useAuth } from "./useAuth";
 
@@ -15,22 +14,35 @@ interface Event {
     frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
     interval: number;
     end_date?: string;
+    weekdays?: string[] | null;
+    weekday?: string | null;
+    ordinal?: number | null;
   };
 }
 
+interface EventsResponse {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: Event[];
+}
+
 const fetchEvents = async (
-  refreshToken: () => Promise<string>
-): Promise<Event[]> => {
+  refreshToken: () => Promise<string>,
+  pageParam: string | null
+): Promise<EventsResponse> => {
   try {
-    const response = await apiClient.get("/events/");
-    return response.data.results;
+    const url = pageParam || "/events/";
+    const response = await apiClient.get(url);
+    return response.data;
   } catch (err: any) {
     if (err.response?.status === 401) {
       const newToken = await refreshToken();
-      const response = await apiClient.get("/events/", {
+      const url = pageParam || "/events/";
+      const response = await apiClient.get(url, {
         headers: { Authorization: `Bearer ${newToken}` },
       });
-      return response.data.results;
+      return response.data;
     }
     throw err;
   }
@@ -38,9 +50,11 @@ const fetchEvents = async (
 
 const useEvents = () => {
   const { refreshToken } = useAuth();
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["events"],
-    queryFn: () => fetchEvents(refreshToken),
+    queryFn: ({ pageParam }) => fetchEvents(refreshToken, pageParam),
+    initialPageParam: null,
+    getNextPageParam: (lastPage) => lastPage.next || undefined,
   });
 };
 
