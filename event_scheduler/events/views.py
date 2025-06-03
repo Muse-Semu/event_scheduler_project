@@ -1,36 +1,129 @@
-from django.shortcuts import render
-
+# event_scheduler_project/events/views.py
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
-from .models import Event
+from rest_framework.pagination import PageNumberPagination
+from django.utils import timezone
+from datetime import datetime, timedelta
+from dateutil import rrule
+from dateutil.relativedelta import relativedelta
+from .models import Event, RecurrenceRule
 from .serializers import EventSerializer
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 
 class EventListCreateView(generics.ListCreateAPIView):
     """
-    API view to list and create single-occurrence events for authenticated users.
+    API view to list and create events for authenticated users.
 
-    GET: Returns a paginated list of events owned by the authenticated user.
-    POST: Creates a new event for the authenticated user.
+    Supports filtering by date range and expands recurring events for calendar view.
     """
-    permission_classes = [IsAuthenticated]
-    serializer_class = EventSerializer
     queryset = Event.objects.all()
+    serializer_class = EventSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         """
-        Filter events to those owned by the authenticated user.
+        Filter events by user and optional date range.
 
-        Returns:
-            QuerySet: Events belonging to the current user.
+        Expands recurring events into instances within the date range.
         """
-        return self.queryset.filter(user=self.request.user)
+        user = self.request.user
+        queryset = Event.objects.filter(user=user).order_by('start_time')
+
+        # Get date range from query params
+        start_date = self.request.query_params.get('start_date')
+        end_date = self.request.query_params.get('end_date')
+
+        if start_date and end_date:
+            try:
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            except ValueError:
+                return queryset  # Invalid date format, return unfiltered
+
+            # Initialize list for expanded events
+            expanded_events = []
+            for event in queryset:
+                if event.is_recurring and event.recurrence_rule:
+                    instances = self.expand_recurring_event(event, start_date, end_date)
+                    expanded_events.extend(instances)
+                elif event.start_time.date() >= start_date and event.start_time.date() <= end_date:
+                    expanded_events.append(event)
+            
+            # Sort and filter expanded events
+            expanded_events.sort(key=lambda x: x.start_time)
+            return expanded_events
+        return queryset
+
+    def expand_recurring_event(self, event, start_date, end_date):
+        """
+        Expand a recurring event into instances within the date range.
+        """
+        rule = event.recurrence_rule
+        frequency_map = {
+            'DAILY': rrule.DAILY,
+            'WEEKLY': rrule.WEEKLY,
+            'MONTHLY': rrule.MONTHLY,
+            'YEARLY': rrule.YEARLY
+        }
+        weekday_map = {
+            'MON': rrule.MO,
+            'TUE': rrule.TU,
+            'WED': rrule.WE,
+            'THU': rrule.TH,
+            'FRI': rrule.FR,
+            'SAT': rrule.SA,
+            'SUN': rrule.SU
+        }
+
+        # Base rrule parameters
+        rrule_kwargs = {
+            'freq': frequency_map[rule.frequency],
+            'dtstart': event.start_time,
+            'interval': rule.interval,
+            'until': rule.end_date if rule.end_date else end_date
+        }
+
+        # Handle WEEKLY weekdays
+        if rule.frequency == 'WEEKLY' and rule.weekdays:
+            rrule_kwargs['byweekday'] = [weekday_map[day] for day in rule.weekdays]
+
+        # Handle MONTHLY relative-date patterns
+        if rule.frequency == 'MONTHLY' and rule.weekday and rule.ordinal:
+            rrule_kwargs['byweekday'] = weekday_map[rule.weekday]
+            rrule_kwargs['bysetpos'] = rule.ordinal
+
+        # Generate recurrence instances
+        try:
+            rr = rrule.rrule(**rrule_kwargs)
+            duration = event.end_time - event.start_time
+            instances = []
+
+            for dt in rr:
+                if dt.date() < start_date or dt.date() > end_date:
+                    continue
+                # Create a new Event instance (not saved to DB)
+                instance = Event(
+                    user=event.user,
+                    title=event.title,
+                    description=event.description,
+                    location=event.location,
+                    start_time=dt,
+                    end_time=dt + duration,
+                    is_recurring=False,  # Instances are not recurring
+                    created_at=event.created_at,
+                    updated_at=event.updated_at
+                )
+                instances.append(instance)
+            return instances
+        except ValueError:
+            return []  # Invalid rrule, skip event
 
     def perform_create(self, serializer):
-        """
-        Save the event with the authenticated user as the owner.
-
-        Args:
-            serializer: The validated serializer instance.
-        """
         serializer.save(user=self.request.user)
