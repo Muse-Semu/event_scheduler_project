@@ -4,6 +4,7 @@ from django.utils import timezone
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from .models import Event, RecurrenceRule
+from django.contrib.auth.models import User
 
 
 class RecurrenceRuleSerializer(serializers.ModelSerializer):
@@ -219,3 +220,24 @@ class EventSerializer(serializers.ModelSerializer):
         recurrence_rule = rule_serializer.save()
         event.recurrence_rule = recurrence_rule
         event.save()
+
+
+
+class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'password', 'email']
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True}
+        }
+
+    def create(self, validated_data):
+        user = User.objects.create_user(
+            username=validated_data['username'],
+            password=validated_data['password'],
+            email=validated_data['email']
+        )
+        return user
