@@ -173,9 +173,49 @@ class EventSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         recurrence_rule_data = validated_data.pop('recurrence_rule', None)
-        event = Event(**validated_data)
+        event = Event.objects.create(**validated_data)
+        
         if recurrence_rule_data:
-            recurrence_rule = RecurrenceRule.objects.create(**recurrence_rule_data)
-            event.recurrence_rule = recurrence_rule
-        event.save()
+            self.create_or_update_recurrence_rule(event, recurrence_rule_data)
+            
         return event
+
+    def update(self, instance, validated_data):
+        recurrence_rule_data = validated_data.pop('recurrence_rule', None)
+        
+        # Update event fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        
+        # Handle recurrence rule
+        if recurrence_rule_data is not None:
+            self.create_or_update_recurrence_rule(instance, recurrence_rule_data)
+        elif instance.is_recurring:
+            # If is_recurring is True but no recurrence_rule provided, keep existing rule
+            pass
+        else:
+            # If not recurring, remove any existing rule
+            if instance.recurrence_rule:
+                instance.recurrence_rule.delete()
+                instance.recurrence_rule = None
+        
+        instance.save()
+        return instance
+
+    def create_or_update_recurrence_rule(self, event, recurrence_rule_data):
+        if event.recurrence_rule:
+            # Update existing rule
+            rule_serializer = RecurrenceRuleSerializer(
+                instance=event.recurrence_rule,
+                data=recurrence_rule_data
+            )
+        else:
+            # Create new rule
+            rule_serializer = RecurrenceRuleSerializer(
+                data=recurrence_rule_data
+            )
+        
+        rule_serializer.is_valid(raise_exception=True)
+        recurrence_rule = rule_serializer.save()
+        event.recurrence_rule = recurrence_rule
+        event.save()
