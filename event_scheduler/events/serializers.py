@@ -11,7 +11,7 @@ class EventSerializer(serializers.ModelSerializer):
     """
     class Meta:
         model = Event
-        fields = ['id', 'title', 'description', 'start_time', 'end_time']
+        fields = ['id', 'title', 'description', 'start_time', 'end_time', 'location', 'is_recurring']
         read_only_fields = ['id']
 
     def validate(self, data):
