@@ -185,3 +185,32 @@ class EventRetrieveUpdateView(generics.RetrieveUpdateAPIView):
         # Perform the update
         self.perform_update(serializer)
         return Response(serializer.data)  
+
+
+
+
+class EventDeleteView(generics.DestroyAPIView):
+    """
+    API view to handle event deletion
+    """
+    queryset = Event.objects.all()
+    permission_classes = [IsAuthenticated]
+    serializer_class = EventSerializer  # Add this line
+    
+    def get_queryset(self):
+        return Event.objects.filter(user=self.request.user)
+    
+    def delete(self, request, *args, **kwargs):
+        event = self.get_object()
+        
+        # Delete related recurrence rule first if it exists
+        if event.recurrence_rule:
+            event.recurrence_rule.delete()
+        
+        # Then delete the event
+        event.delete()
+        
+        return Response(
+            {'message': 'Event deleted successfully'},
+            status=status.HTTP_200_OK
+        )
