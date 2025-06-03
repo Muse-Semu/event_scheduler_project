@@ -10,43 +10,19 @@ class RecurrenceRuleSerializer(serializers.ModelSerializer):
     """
     Serializes recurrence rules for events.
 
-    Validates frequency, interval, end_date, and weekdays for recurrence patterns.
+    Validates frequency, interval, end_date, weekdays, and relative-date patterns.
     """
     class Meta:
         model = RecurrenceRule
-        fields = ['frequency', 'interval', 'end_date', 'weekdays']
+        fields = ['frequency', 'interval', 'end_date', 'weekdays', 'weekday', 'ordinal']
 
     def validate_frequency(self, value):
-        """
-        Ensure frequency is valid.
-
-        Args:
-            value: Frequency value.
-
-        Raises:
-            ValidationError: If frequency is invalid.
-
-        Returns:
-            Validated frequency.
-        """
         valid_frequencies = [choice[0] for choice in RecurrenceRule.FREQUENCY_CHOICES]
         if value not in valid_frequencies:
             raise serializers.ValidationError(f"Frequency must be one of {valid_frequencies}.")
         return value
 
     def validate_interval(self, value):
-        """
-        Ensure interval is positive and reasonable (≤ 100).
-
-        Args:
-            value: Interval value.
-
-        Raises:
-            ValidationError: If interval is invalid.
-
-        Returns:
-            Validated interval.
-        """
         if value <= 0:
             raise serializers.ValidationError("Interval must be a positive integer.")
         if value > 100:
@@ -54,35 +30,11 @@ class RecurrenceRuleSerializer(serializers.ModelSerializer):
         return value
 
     def validate_end_date(self, value):
-        """
-        Ensure end_date is in the future if provided.
-
-        Args:
-            value: End_date value.
-
-        Raises:
-            ValidationError: If end_date is past.
-
-        Returns:
-            Validated end_date.
-        """
         if value and value < timezone.now().date():
             raise serializers.ValidationError("End date cannot be in the past.")
         return value
 
     def validate_weekdays(self, value):
-        """
-        Ensure weekdays are valid and unique.
-
-        Args:
-            value: List of weekday abbreviations.
-
-        Raises:
-            ValidationError: If invalid or duplicate weekdays.
-
-        Returns:
-            Validated weekdays.
-        """
         if value:
             valid_days = [choice[0] for choice in RecurrenceRule.WEEKDAY_CHOICES]
             invalid_days = [d for d in value if d not in valid_days]
@@ -92,25 +44,51 @@ class RecurrenceRuleSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Duplicate weekdays are not allowed.")
         return value
 
+    def validate_weekday(self, value):
+        if value:
+            valid_days = [choice[0] for choice in RecurrenceRule.WEEKDAY_CHOICES]
+            if value not in valid_days:
+                raise serializers.ValidationError(f"Weekday must be one of {valid_days}.")
+        return value
+
+    def validate_ordinal(self, value):
+        if value:
+            valid_ordinals = [choice[0] for choice in RecurrenceRule.ORDINAL_CHOICES]
+            if value not in valid_ordinals:
+                raise serializers.ValidationError(f"Ordinal must be one of {valid_ordinals}.")
+        return value
+
     def validate(self, data):
-        """
-        Ensure weekdays are only used with WEEKLY frequency.
-
-        Args:
-            data: Recurrence rule data.
-
-        Raises:
-            ValidationError: If weekdays used with non-WEEKLY frequency.
-
-        Returns:
-            Validated data.
-        """
         frequency = data.get('frequency')
         weekdays = data.get('weekdays')
+        weekday = data.get('weekday')
+        ordinal = data.get('ordinal')
+
+        # Weekdays for WEEKLY only
         if weekdays and frequency != 'WEEKLY':
             raise serializers.ValidationError({
                 "weekdays": "Weekdays can only be specified for WEEKLY frequency."
             })
+
+        # Weekday and ordinal for MONTHLY only
+        if (weekday or ordinal) and frequency != 'MONTHLY':
+            raise serializers.ValidationError({
+                "weekday": "Weekday and ordinal can only be specified for MONTHLY frequency."
+            })
+
+        # Both weekday and ordinal required together
+        if bool(weekday) != bool(ordinal):
+            raise serializers.ValidationError({
+                "weekday": "Both weekday and ordinal must be provided for MONTHLY relative-date patterns.",
+                "ordinal": "Both weekday and ordinal must be provided for MONTHLY relative-date patterns."
+            })
+
+        # No mixing weekdays with relative-date patterns
+        if weekdays and (weekday or ordinal):
+            raise serializers.ValidationError({
+                "weekdays": "Cannot specify weekdays with weekday/ordinal for MONTHLY recurrence."
+            })
+
         return data
 
 
@@ -128,18 +106,6 @@ class EventSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def validate(self, data):
-        """
-        Validate event data, including weekday-based recurrence rules.
-
-        Args:
-            data: Input data.
-
-        Raises:
-            ValidationError: If validations fail.
-
-        Returns:
-            Validated data.
-        """
         # Time validations
         if data['start_time'] < timezone.now():
             raise serializers.ValidationError({"start_time": "Start time must be in the future."})
@@ -161,6 +127,8 @@ class EventSerializer(serializers.ModelSerializer):
             frequency = recurrence_rule.get('frequency')
             interval = recurrence_rule.get('interval', 1)
             weekdays = recurrence_rule.get('weekdays')
+            weekday = recurrence_rule.get('weekday')
+            ordinal = recurrence_rule.get('ordinal')
 
             # Ensure end_date is after or equal to start_time.date()
             if end_date and end_date < start_date:
@@ -177,7 +145,6 @@ class EventSerializer(serializers.ModelSerializer):
                 elif frequency == 'WEEKLY':
                     min_duration = start_date + timedelta(days=interval * 7)
                     if weekdays:
-                        # Require at least one week for weekday-specific events
                         if end_date < start_date + timedelta(days=7):
                             raise serializers.ValidationError({
                                 "recurrence_rule": {
@@ -186,6 +153,14 @@ class EventSerializer(serializers.ModelSerializer):
                             })
                 elif frequency == 'MONTHLY':
                     min_duration = start_date + relativedelta(months=interval)
+                    if weekday and ordinal:
+                        # Require at least one month for relative-date patterns
+                        if end_date < start_date + relativedelta(months=1):
+                            raise serializers.ValidationError({
+                                "recurrence_rule": {
+                                    "end_date": f"{error_msg} Minimum date: {start_date + relativedelta(months=1)}."
+                                }
+                            })
                 elif frequency == 'YEARLY':
                     min_duration = start_date + relativedelta(years=interval)
 
@@ -197,15 +172,6 @@ class EventSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        """
-        Create an event with an optional recurrence rule.
-
-        Args:
-            validated_data: Validated data.
-
-        Returns:
-            Created Event instance.
-        """
         recurrence_rule_data = validated_data.pop('recurrence_rule', None)
         event = Event(**validated_data)
         if recurrence_rule_data:
