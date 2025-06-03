@@ -12,6 +12,9 @@ interface Event {
     frequency: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY";
     interval: number;
     end_date?: string;
+    weekdays?: string[] | null;
+    weekday?: string | null;
+    ordinal?: number | null;
   };
 }
 

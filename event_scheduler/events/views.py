@@ -8,6 +8,8 @@ from dateutil import rrule
 from dateutil.relativedelta import relativedelta
 from .models import Event, RecurrenceRule
 from .serializers import EventSerializer
+from rest_framework.response import Response
+from rest_framework import status
 
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -127,3 +129,59 @@ class EventListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+
+class EventRetrieveUpdateView(generics.RetrieveUpdateAPIView):
+    """
+    API view to retrieve and update events for authenticated users.
+    
+    Ensures users can only access their own events and applies the same validations
+    as creation when updating events.
+    """
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer
+    permission_classes = [IsAuthenticated]
+    
+    def get_queryset(self):
+        """Restrict queryset to only events belonging to the requesting user."""
+        return Event.objects.filter(user=self.request.user)
+    
+    def perform_update(self, serializer):
+        """Ensure the user field remains unchanged when updating."""
+        serializer.save(user=self.request.user)
+        
+    def update(self, request, *args, **kwargs):
+        """Handle update with the same validations as creation."""
+        # Get the existing event
+        instance = self.get_object()
+        
+        # Validate the data using the same serializer as creation
+        serializer = self.get_serializer(instance, data=request.data, partial=kwargs.get('partial', False))
+        serializer.is_valid(raise_exception=True)
+        
+        # Check for valid date/time ranges
+        start_time = serializer.validated_data.get('start_time', instance.start_time)
+        end_time = serializer.validated_data.get('end_time', instance.end_time)
+        
+        if end_time <= start_time:
+            return Response(
+                {'error': 'End time must be after start time'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        
+        
+        # If updating a recurring event, handle recurrence rule validation
+        is_recurring = serializer.validated_data.get('is_recurring', instance.is_recurring)
+        recurrence_rule = serializer.validated_data.get('recurrence_rule', instance.recurrence_rule)
+        
+        if is_recurring and not recurrence_rule:
+            return Response(
+                {'error': 'Recurring events must have a recurrence rule'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Perform the update
+        self.perform_update(serializer)
+        return Response(serializer.data)  
