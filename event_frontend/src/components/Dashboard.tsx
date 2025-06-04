@@ -8,7 +8,7 @@ import { Link } from "react-router-dom";
 import useAuthStore from "../store/authStore";
 
 const Dashboard = () => {
-  const { user } = useAuthStore().accessToken;
+  const { user } = useAuthStore();
   const currentDate = new Date();
   const { openModal } = useModalStore();
 
@@ -49,7 +49,9 @@ const Dashboard = () => {
       {/* Header */}
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-800">
-          Welcome back, <span className="text-blue-600">{user?.access}</span>!
+          Welcome back,{" "}
+          <span className="text-blue-600">{user?.email}</span>
+          !
         </h1>
         <p className="text-gray-600 mt-2">
           {format(currentDate, "EEEE, MMMM do yyyy")}
@@ -121,18 +123,7 @@ const Dashboard = () => {
           <h3 className="text-lg font-medium text-gray-800 mb-4">
             Recent Activity
           </h3>
-          <div className="space-y-4">
-            <ActivityItem
-              type="event_created"
-              title="Team Meeting"
-              time="2 hours ago"
-            />
-            <ActivityItem
-              type="event_updated"
-              title="Product Launch"
-              time="Yesterday"
-            />
-          </div>
+        
         </div>
 
         <div className="bg-white rounded-xl shadow-sm p-6">
