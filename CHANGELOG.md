@@ -87,7 +87,7 @@ This changelog tracks updates for the Event Scheduler project, from US-01 (Event
 - **JWT Authentication** and **Pagination**.
 
 ### Notes
-- **Time**: Completed Jun 2 2025
+- **Time**: 
 
 For usage, see [README.md](README.md).
 ```
