@@ -15,7 +15,7 @@ const Navbar: React.FC = () => {
         <div className="space-x-4">
           {isAuthenticated ? (
             <>
-              <Link to="/" className="hover:underline">
+              <Link to="/calendar" className="hover:underline">
                 Calendar
               </Link>
               <Link to="/events" className="hover:underline">
