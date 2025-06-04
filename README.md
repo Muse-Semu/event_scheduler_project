@@ -322,14 +322,16 @@ The recurrence rule feature (US-02, US-03, US-04, US-05) enables users to create
   - **US-03**: Interval-based recurrence (e.g., every 3rd day, 2nd month).
   - **US-04**: Weekday-specific recurrence (e.g., every Monday and Wednesday).
   - **US-05**: Relative-date patterns (e.g., second Friday of each month).
-  - **US-10**: Validation for time, recurrence, and duration (partial).
-  - **US-12**: JWT authentication for secure API access (partial).
-  - Django project setup with PostgreSQL 17 and `events` app.
-- **In Progress**:
+  - **US-06**: Calendar view for events
+  - **US-07**: Event viewng list
+  - **US-08**: Event editng
+  - **US-09**: Event delation
+  - **US-10**: Validation for time, recurrence, and duration .
   - **US-11**: User registration.
+  - **US-12**: JWT authentication for secure API access .
+  - **US-13**: Logout
+ 
 - **Planned**:
-  - **US-06 to US-09, US-13**: Views, editing, deletion, logout.
-  - React + TypeScript frontend (US-06, US-07).
   - Automated tests (SS-03).
   - Stretch goals (SS-01 to SS-04).
   - Full Dockerization.
